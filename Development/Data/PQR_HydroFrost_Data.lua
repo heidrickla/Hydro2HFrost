@@ -2,7 +2,7 @@ if not PQR_LoadedDataFile then
 	PQR_LoadedDateFile = 1
 	PQ_PlayerName = UnitName("player")
 	PQ_PlayerRace = select(2, UnitRace("player"))
-	print("|cffFFBE69Frost DW Data File - Oct 05, 2013|cffffffff")
+	print("|cffFFBE69Frost 2H Data File - Jan 9, 2014|cffffffff")
 end
 
 TargetValidation = nil
@@ -357,6 +357,7 @@ PQ_KillingMachine = 51124
 PQ_BloodCharge = 114851
 PQ_RunicCorruptionBuff = 51460
 PQ_DarkSuccor = 101568
+
 
 -- Debuffs
 PQ_FrostFever = 55095

@@ -1,0 +1,1326 @@
+<?xml version="1.0" encoding="utf-8" ?><DEATHKNIGHT><Ability><Name>[2H] Frost Strike</Name><Default>false</Default><SpellID>0</SpellID><Actions></Actions><Lua>local PQ_FrostStrike = PQ_FrostStrike
+local TargetValidationMelee = TargetValidationMelee
+
+if PQ_CanCast
+and OffhandHasWeapon() == nil
+and UseAoE == false
+and TargetValidationMelee(&amp;quot;target&amp;quot;, PQ_FrostStrike) then
+	CastSpellByName(GetSpellInfo(PQ_FrostStrike), &amp;quot;target&amp;quot;)
+	return true
+end</Lua><RecastDelay>0</RecastDelay><Target>Target</Target><CancelChannel>False</CancelChannel><SkipUnknown>True</SkipUnknown></Ability><Ability><Name>[2H] Frost Strike (BC &amp;lt;= 10)</Name><Default>false</Default><SpellID>0</SpellID><Actions></Actions><Lua>local PQ_FrostStrike = PQ_FrostStrike
+local TargetValidationMelee = TargetValidationMelee
+
+if not IsSpellKnown(PQ_BloodTap) then return false end
+
+local charges = select(4, UnitBuffID(&amp;quot;player&amp;quot;, PQ_BloodCharge))
+
+if PQ_CanCast
+and OffhandHasWeapon() == nil
+and UseAoE == false
+and charges and charges &amp;lt;= 10
+and TargetValidationMelee(&amp;quot;target&amp;quot;, PQ_FrostStrike) then
+	CastSpellByName(GetSpellInfo(PQ_FrostStrike), &amp;quot;target&amp;quot;)
+	return true
+end</Lua><RecastDelay>0</RecastDelay><Target>Target</Target><CancelChannel>False</CancelChannel><SkipUnknown>True</SkipUnknown></Ability><Ability><Name>[2H] Frost Strike (no RC)</Name><Default>false</Default><SpellID>0</SpellID><Actions></Actions><Lua>local PQ_FrostStrike = PQ_FrostStrike
+local TargetValidationMelee = TargetValidationMelee
+
+if not IsSpellKnown(PQ_RunicCorruption) then return false end
+
+if PQ_CanCast
+and OffhandHasWeapon() == nil
+and UseAoE == false
+and not UnitBuffID(&amp;quot;player&amp;quot;, PQ_RunicCorruptionBuff)
+and TargetValidationMelee(&amp;quot;target&amp;quot;, PQ_FrostStrike) then
+	CastSpellByName(GetSpellInfo(PQ_FrostStrike), &amp;quot;target&amp;quot;)
+	return true
+end</Lua><RecastDelay>0</RecastDelay><Target>Target</Target><CancelChannel>False</CancelChannel><SkipUnknown>True</SkipUnknown></Ability><Ability><Name>[Misc] Init</Name><Default>false</Default><SpellID>0</SpellID><Actions></Actions><Lua>-------------------------------------------------------------------------------
+-- Variables &amp; Sanity checks
+-------------------------------------------------------------------------------
+-- Load LUA data files.
+if PQR_RotationStarted then
+	PQR_RotationStarted = false
+	
+	PQR_UI = &amp;quot;Blizzard&amp;quot; -- Options: Blizzard, ElvUI
+	--/run print( GetMouseFocus():GetName() or &amp;apos;unknown&amp;apos; )
+	
+	if PQR_UI == &amp;quot;ElvUI&amp;quot; then
+		PQR_OverrideActionBarButton1 = &amp;quot;ElvUI_Bar1Button1&amp;quot;
+		PQR_OverrideActionBarButton2 = &amp;quot;ElvUI_Bar1Button2&amp;quot;
+	elseif PQR_UI == &amp;quot;Blizzard&amp;quot; then
+		PQR_OverrideActionBarButton1 = &amp;quot;OverrideActionBarButton1&amp;quot;
+		PQR_OverrideActionBarButton2 = &amp;quot;OverrideActionBarButton2&amp;quot;
+	else
+		PQR_OverrideActionBarButton1 = &amp;quot;OverrideActionBarButton1&amp;quot;
+		PQR_OverrideActionBarButton2 = &amp;quot;OverrideActionBarButton2&amp;quot;
+	end
+
+	if PQR_LoadLua ~= nil then
+		if PQR_LoadLua(&amp;quot;PQR_Frost_DW_Wey_Data.lua&amp;quot;) == false then
+			PQR_WriteToChat(&amp;quot;|cffb73737You&amp;apos;re missing PQR_Frost_DW_Wey_Data.lua - Make sure it&amp;apos;s in your Data folder! The Rotation has been halted.|cffffffff&amp;quot;, &amp;quot;Error&amp;quot;)
+			PQR_StopRotation()
+			return true
+		end
+	end
+	
+	if not PQ_DKLoaded then
+		-- Create Frame
+		if not PQ_Frame then 
+			PQ_Frame = CreateFrame(&amp;quot;Frame&amp;quot;)
+			PQ_Frame:RegisterEvent(&amp;quot;UNIT_SPELLCAST_SUCCEEDED&amp;quot;)
+			PQ_Frame:SetScript(&amp;quot;OnEvent&amp;quot;, PQ_Frame_OnEvent)
+			PQ_Frame:Show()
+		end
+		
+		-- Check for 2 Min CD
+		for _,spell in ipairs(PQ_2MinCDList) do
+			if IsSpellKnown(spell) then
+				PQ_Has2MinCD = true
+				break
+			end
+		end
+		
+		RunMacroText(&amp;quot;/use 10&amp;quot;)
+		
+		PQ_DKLoaded = true
+	end
+end
+
+if IsMounted() then return true end
+if PQ_CanCast == false and PQ_GCD &amp;lt;= GetTime() then PQ_CanCast = true end
+if PQ_CanBT == false and PQ_BTCD &amp;lt;= GetTime() then PQ_CanBT = true end
+if PQ_CanImpalingSpear == false and PQ_ImpalingSpearCD &amp;lt;= GetTime() then PQ_CanImpalingSpear = true end
+
+RunicPower = UnitPower(&amp;quot;player&amp;quot;)
+PlayerHp   = 100 * UnitHealth(&amp;quot;player&amp;quot;) / UnitHealthMax(&amp;quot;player&amp;quot;)
+TargetHp   = 100 * UnitHealth(&amp;quot;target&amp;quot;) / UnitHealthMax(&amp;quot;target&amp;quot;)
+
+-- Rune checks
+BloodRunes = 0
+UnholyRunes = 0
+FrostRunes = 0
+DeathRunes = 0
+FullyDepleted = 0
+
+for i=1,6,2 do
+	local type = GetRuneType(i)
+	local type2 = GetRuneType(i+1)
+	
+	local cd = select(3, GetRuneCooldown(i))
+	local cd2 = select(3, GetRuneCooldown(i+1))
+	
+	if FullyDepleted == 0
+	and cd == false
+	and cd2 == false then
+		FullyDepleted = 1
+	end
+	
+	if cd == true then
+		if type == 2 then
+			UnholyRunes = UnholyRunes + 1
+		elseif type == 3 then
+			FrostRunes = FrostRunes + 1
+		elseif i == 1 then
+			BloodRunes = BloodRunes + 1
+		else
+			DeathRunes = DeathRunes + 1
+		end
+	end
+	
+	if cd2 == true then
+		if type2 == 2 then
+			UnholyRunes = UnholyRunes + 1
+		elseif type2 == 3 then
+			FrostRunes = FrostRunes + 1
+		elseif i == 1 then
+			BloodRunes = BloodRunes + 1
+		else
+			DeathRunes = DeathRunes + 1
+		end
+	end
+end</Lua><RecastDelay>0</RecastDelay><Target>Target</Target><CancelChannel>False</CancelChannel><SkipUnknown>True</SkipUnknown></Ability><Ability><Name>[Misc] Pause</Name><Default>false</Default><SpellID>0</SpellID><Actions></Actions><Lua>local PlayerCombat = UnitAffectingCombat(&amp;quot;player&amp;quot;) 
+
+if IsMounted()
+or not PlayerCombat
+or UnitInVehicle(&amp;quot;player&amp;quot;)
+or UnitIsDeadOrGhost(&amp;quot;player&amp;quot;)
+or (UsePauseEnabled == true and PQI:IsHotkeys(UsePauseKey))
+or PlayerHasBuff(30024) -- Drinking
+or PlayerHasBuff(104934) -- Eating
+ then
+ 	return true
+end</Lua><RecastDelay>100</RecastDelay><Target>Target</Target><CancelChannel>False</CancelChannel><SkipUnknown>True</SkipUnknown></Ability><Ability><Name>[All] Death Pact</Name><Default>false</Default><SpellID>0</SpellID><Actions></Actions><Lua>if not UseTier4Talent then return false end
+local PlayerHp = PlayerHp
+local PQ_DeathPact = PQ_DeathPact
+local _,ghoul = GetTotemInfo(1)
+local HealthFrame = tonumber(UseTier4TalentValue)
+
+
+if PQ_CanCast
+   and PQR_SpellAvailable(PQ_DeathPact)
+   and ghoul ~= nil
+   and ghoul ~= &amp;quot;&amp;quot;
+   and PlayerHp &amp;lt;= HealthFrame then
+       CastSpellByName(GetSpellInfo(PQ_DeathPact))
+   return true
+end</Lua><RecastDelay>0</RecastDelay><Target>Target</Target><CancelChannel>False</CancelChannel><SkipUnknown>True</SkipUnknown></Ability><Ability><Name>[2H] Frost Strike (RE and Frost = 0)</Name><Default>false</Default><SpellID>0</SpellID><Actions></Actions><Lua>local PQ_FrostStrike = PQ_FrostStrike
+local TargetValidationMelee = TargetValidationMelee
+
+if not IsSpellKnown(PQ_RunicEmpowerment) then return false end
+
+if PQ_CanCast
+and OffhandHasWeapon() == nil
+and UseAoE == false
+and FrostRunes == 0
+and TargetValidationMelee(&amp;quot;target&amp;quot;, PQ_FrostStrike) then
+	CastSpellByName(GetSpellInfo(PQ_FrostStrike), &amp;quot;target&amp;quot;)
+	return true
+end</Lua><RecastDelay>0</RecastDelay><Target>Target</Target><CancelChannel>False</CancelChannel><SkipUnknown>True</SkipUnknown></Ability><Ability><Name>[2H] Howling Blast (No Debuff)</Name><Default>false</Default><SpellID>0</SpellID><Actions></Actions><Lua>local PQ_HowlingBlast = PQ_HowlingBlast
+local PQ_FrostFever = PQ_FrostFever
+local TargetValidation = TargetValidation
+
+if UnitBuffID(&amp;quot;player&amp;quot;, PQ_UnholyBlight) then return false end
+
+if PQ_CanCast
+and OffhandHasWeapon() == nil
+and UseAoE == false
+and (FrostRunes &amp;gt;= 1 or DeathRunes &amp;gt;= 1)
+and PQ_OutbreakCD - GetTime() &amp;gt; 5 -- Outbreak is more than 5 seconds on CD
+and PQ_HB and not UnitDebuffID(&amp;quot;target&amp;quot;, PQ_FrostFever, &amp;quot;player&amp;quot;)
+and TargetValidation(&amp;quot;target&amp;quot;, PQ_HowlingBlast) then
+	CastSpellByName(GetSpellInfo(PQ_HowlingBlast), &amp;quot;target&amp;quot;)
+	return true
+end</Lua><RecastDelay>0</RecastDelay><Target>Target</Target><CancelChannel>False</CancelChannel><SkipUnknown>True</SkipUnknown></Ability><Ability><Name>[2H] Obliterate</Name><Default>false</Default><SpellID>0</SpellID><Actions></Actions><Lua>local PQ_Obliterate = PQ_Obliterate
+local TargetValidationMelee = TargetValidationMelee
+
+if PQ_CanCast
+and OffhandHasWeapon() == nil
+and UseAoE == false
+and TargetValidationMelee(&amp;quot;target&amp;quot;, PQ_Obliterate) then
+	CastSpellByName(GetSpellInfo(PQ_Obliterate), &amp;quot;target&amp;quot;)
+	return true
+end</Lua><RecastDelay>0</RecastDelay><Target>Target</Target><CancelChannel>False</CancelChannel><SkipUnknown>True</SkipUnknown></Ability><Ability><Name>[2H] Howling Blast (Rime)</Name><Default>false</Default><SpellID>0</SpellID><Actions></Actions><Lua>local PQ_HowlingBlast = PQ_HowlingBlast
+local PQ_Rime = PQ_Rime
+local TargetValidation = TargetValidation
+
+if PQ_CanCast
+and OffhandHasWeapon() == nil
+and UseAoE == false
+and (FrostRunes &amp;gt;= 1 or DeathRunes &amp;gt;= 1)
+and PQ_HB and UnitBuffID(&amp;quot;player&amp;quot;, PQ_Rime)
+and TargetValidation(&amp;quot;target&amp;quot;, PQ_HowlingBlast) then
+	CastSpellByName(GetSpellInfo(PQ_HowlingBlast), &amp;quot;target&amp;quot;)
+	return true
+end</Lua><RecastDelay>0</RecastDelay><Target>Target</Target><CancelChannel>False</CancelChannel><SkipUnknown>True</SkipUnknown></Ability><Ability><Name>[2H] Soul Reaper</Name><Default>false</Default><SpellID>0</SpellID><Actions></Actions><Lua>local PQ_SoulReaper = PQ_SoulReaper
+local TargetValidationMelee = TargetValidationMelee
+
+if PQ_CanCast
+and OffhandHasWeapon() == nil
+and UseAoE == false
+and UseDWRotation == false
+and TargetHp &amp;lt;= 35
+and TargetValidationMelee(&amp;quot;target&amp;quot;, PQ_SoulReaper) then
+	CastSpellByName(GetSpellInfo(PQ_SoulReaper), &amp;quot;target&amp;quot;)
+	return true
+end</Lua><RecastDelay>0</RecastDelay><Target>Target</Target><CancelChannel>False</CancelChannel><SkipUnknown>True</SkipUnknown></Ability><Ability><Name>[2H] Outbreak (no BP or no FF)</Name><Default>false</Default><SpellID>0</SpellID><Actions></Actions><Lua>local PQ_FrostFever = PQ_FrostFever
+local PQ_BloodPlague = PQ_BloodPlague
+local PQ_Outbreak = PQ_Outbreak
+local TargetValidation = TargetValidation
+
+if PQ_CanCast == false then return false end
+
+local FF,_,_,_,_,_,FFtimer = UnitDebuffID(&amp;quot;target&amp;quot;,PQ_FrostFever,&amp;quot;player&amp;quot;)
+local BP,_,_,_,_,_,BPtimer = UnitDebuffID(&amp;quot;target&amp;quot;,PQ_BloodPlague,&amp;quot;player&amp;quot;)
+
+if not BP or not FF then
+	if PQ_CanCast
+	   and OffhandHasWeapon() == nil
+	   and UseAoE == false
+       and TargetValidation(&amp;quot;target&amp;quot;, PQ_Outbreak) then
+		CastSpellByName(GetSpellInfo(PQ_Outbreak), &amp;quot;target&amp;quot;)
+		PQ_ShouldPestilence = true
+		return true
+	end
+end</Lua><RecastDelay>0</RecastDelay><Target>Target</Target><CancelChannel>False</CancelChannel><SkipUnknown>True</SkipUnknown></Ability><Ability><Name>[2H] Frost Strike (RP &amp;gt; 76)</Name><Default>false</Default><SpellID>0</SpellID><Actions></Actions><Lua>local PQ_FrostStrike = PQ_FrostStrike
+local TargetValidationMelee = TargetValidationMelee
+
+if PQ_CanCast
+and OffhandHasWeapon() == nil
+and UseAoE == false
+and TargetValidationMelee(&amp;quot;target&amp;quot;, PQ_FrostStrike)
+and RunicPower &amp;gt; 76 then
+	CastSpellByName(GetSpellInfo(PQ_FrostStrike), &amp;quot;target&amp;quot;)
+	return true
+end</Lua><RecastDelay>0</RecastDelay><Target>Target</Target><CancelChannel>False</CancelChannel><SkipUnknown>True</SkipUnknown></Ability><Ability><Name>[All] Empower Rune Weapon</Name><Default>false</Default><SpellID>0</SpellID><Actions></Actions><Lua>local PQ_Empower = PQ_Empower
+
+if PQ_CanCast
+and (UseCD == true or UseCDBoss == true)
+and UnholyRunes == 0 and DeathRunes == 0 and FrostRunes == 0
+and PQR_SpellAvailable(PQ_Empower)
+and SpecialUnit() then
+	CastSpellByName(GetSpellInfo(PQ_Empower), &amp;quot;player&amp;quot;)
+	return true
+end</Lua><RecastDelay>0</RecastDelay><Target>Target</Target><CancelChannel>False</CancelChannel><SkipUnknown>True</SkipUnknown></Ability><Ability><Name>[2H] Unholy Blight</Name><Default>false</Default><SpellID>0</SpellID><Actions></Actions><Lua>local PQ_FrostFever = PQ_FrostFever
+local PQ_BloodPlague = PQ_BloodPlague
+local PQ_UnholyBlight = PQ_UnholyBlight
+local TargetValidation = TargetValidation
+
+if PQ_CanCast == false or not IsSpellKnown(PQ_UnholyBlight) then return false end
+
+local FF,_,_,_,_,_,FFtimer = UnitDebuffID(&amp;quot;target&amp;quot;,PQ_FrostFever,&amp;quot;player&amp;quot;)
+local BP,_,_,_,_,_,BPtimer = UnitDebuffID(&amp;quot;target&amp;quot;,PQ_BloodPlague,&amp;quot;player&amp;quot;)
+
+if BP and FF and OffhandHasWeapon() == nil then
+	if (FFtimer - GetTime() &amp;lt; 3
+	or BPtimer - GetTime() &amp;lt; 3)
+	and UseAoE == false
+	and UseDWRotation == false
+	and TargetValidation(&amp;quot;target&amp;quot;, PQ_UnholyBlight) then
+		CastSpellByName(GetSpellInfo(PQ_UnholyBlight), &amp;quot;target&amp;quot;)
+		PQ_ShouldPestilence = false
+		return true
+	end
+else
+	if TargetValidation(&amp;quot;target&amp;quot;, PQ_UnholyBlight)
+	and OffhandHasWeapon() == nil then
+		CastSpellByName(GetSpellInfo(PQ_UnholyBlight), &amp;quot;target&amp;quot;)
+		PQ_ShouldPestilence = false
+		return true
+	end
+end</Lua><RecastDelay>0</RecastDelay><Target>Target</Target><CancelChannel>False</CancelChannel><SkipUnknown>True</SkipUnknown></Ability><Ability><Name>[2H] Plague Strike (no debuff)</Name><Default>false</Default><SpellID>0</SpellID><Actions></Actions><Lua>local PQ_PlagueStrike = PQ_PlagueStrike
+local PQ_BloodPlague = PQ_BloodPlague
+local TargetValidation = TargetValidation
+
+if UnitBuffID(&amp;quot;player&amp;quot;, PQ_UnholyBlight) then return false end
+
+if PQ_CanCast
+and OffhandHasWeapon() == nil
+and UseAoE == false
+and PQ_OutbreakCD - GetTime() &amp;gt; 5 -- Outbreak is more than 5 seconds on CD
+and not UnitDebuffID(&amp;quot;target&amp;quot;, PQ_BloodPlague, &amp;quot;player&amp;quot;)
+and TargetValidation(&amp;quot;target&amp;quot;, PQ_PlagueStrike) then
+	CastSpellByName(GetSpellInfo(PQ_PlagueStrike), &amp;quot;target&amp;quot;)
+	PQ_ShouldPestilence = true
+	return true
+end</Lua><RecastDelay>0</RecastDelay><Target>Target</Target><CancelChannel>False</CancelChannel><SkipUnknown>True</SkipUnknown></Ability><Ability><Name>[2H] Obliterate (Blood = 2 or Frost = 2 or Unholy = 2)</Name><Default>false</Default><SpellID>0</SpellID><Actions></Actions><Lua>local PQ_Obliterate = PQ_Obliterate
+local TargetValidationMelee = TargetValidationMelee
+
+if PQ_CanCast
+and OffhandHasWeapon() == nil
+and UseAoE == false
+and (BloodRunes == 2 or FrostRuens == 2 or UnholyRunes == 2)
+and TargetValidationMelee(&amp;quot;target&amp;quot;, PQ_Obliterate) then
+	CastSpellByName(GetSpellInfo(PQ_Obliterate), &amp;quot;target&amp;quot;)
+	return true
+end</Lua><RecastDelay>0</RecastDelay><Target>Target</Target><CancelChannel>False</CancelChannel><SkipUnknown>True</SkipUnknown></Ability><Ability><Name>[2H] Pestilence</Name><Default>false</Default><SpellID>0</SpellID><Actions></Actions><Lua>local PQ_Pestilence = PQ_Pestilence
+local PQ_FrostFever = PQ_FrostFever
+local PQ_BloodPlague = PQ_BloodPlague
+local TargetValidationMelee = TargetValidationMelee
+
+if PQ_CanCast
+and OffhandHasWeapon() == nil
+and UseAoE == false
+and PQ_ShouldPestilence == true
+and UnitDebuffID(&amp;quot;target&amp;quot;,PQ_FrostFever,&amp;quot;player&amp;quot;)
+and UnitDebuffID(&amp;quot;target&amp;quot;,PQ_BloodPlague,&amp;quot;player&amp;quot;)
+and TargetValidationMelee(&amp;quot;target&amp;quot;, PQ_Pestilence) then
+	CastSpellByName(GetSpellInfo(PQ_Pestilence), &amp;quot;target&amp;quot;)
+	return true
+end</Lua><RecastDelay>0</RecastDelay><Target>Target</Target><CancelChannel>False</CancelChannel><SkipUnknown>True</SkipUnknown></Ability><Ability><Name>[All] Healthstone</Name><Default>false</Default><SpellID>0</SpellID><Actions></Actions><Lua>if UseHealthstone ~= true then return false end
+local PlayerCombat = UnitAffectingCombat(&amp;quot;player&amp;quot;) 
+if not PlayerCombat then return false end
+
+local HealthFrame = tonumber(UseHealthstoneValue)
+
+if PQ_CanCast
+    and GetItemCount(5512,false,true) &amp;gt;= 1
+    and PlayerHpPercentage &amp;lt;= HealthFrame
+	and PQR_SpellAvailable(5512)
+	and UnitAffectingCombat(&amp;quot;player&amp;quot;)
+	and GetItemCooldown(5512) == 0
+then
+	UseItemByName(5512)
+	return true
+end</Lua><RecastDelay>0</RecastDelay><Target>Player</Target><CancelChannel>False</CancelChannel><SkipUnknown>True</SkipUnknown></Ability><Ability><Name>[2H] Outbreak</Name><Default>false</Default><SpellID>0</SpellID><Actions></Actions><Lua>local PQ_FrostFever = PQ_FrostFever
+local PQ_BloodPlague = PQ_BloodPlague
+local PQ_Outbreak = PQ_Outbreak
+local TargetValidation = TargetValidation
+
+if PQ_CanCast == false then return false end
+
+local FF,_,_,_,_,_,FFtimer = UnitDebuffID(&amp;quot;target&amp;quot;,PQ_FrostFever,&amp;quot;player&amp;quot;)
+local BP,_,_,_,_,_,BPtimer = UnitDebuffID(&amp;quot;target&amp;quot;,PQ_BloodPlague,&amp;quot;player&amp;quot;)
+
+if PQ_CanCast
+   and OffhandHasWeapon() == nil
+   and UseAoE == false
+   and BP and FF then
+	if (FFtimer - GetTime() &amp;lt; 3
+	or BPtimer - GetTime() &amp;lt; 3)
+	and TargetValidation(&amp;quot;target&amp;quot;, PQ_Outbreak) then
+		CastSpellByName(GetSpellInfo(PQ_Outbreak), &amp;quot;target&amp;quot;)
+		PQ_ShouldPestilence = true
+		return true
+	end
+else
+	if PQ_CanCast
+	   and OffhandHasWeapon() == nil
+	   and UseAoE == false
+       and TargetValidation(&amp;quot;target&amp;quot;, PQ_Outbreak) then
+		CastSpellByName(GetSpellInfo(PQ_Outbreak), &amp;quot;target&amp;quot;)
+		PQ_ShouldPestilence = true
+		return true
+	end
+end</Lua><RecastDelay>0</RecastDelay><Target>Target</Target><CancelChannel>False</CancelChannel><SkipUnknown>True</SkipUnknown></Ability><Ability><Name>[All] Horn of Winter</Name><Default>false</Default><SpellID>0</SpellID><Actions></Actions><Lua>local PQ_Horn = PQ_Horn
+
+if PQ_CanCast
+and PQR_SpellAvailable(PQ_Horn) then
+	CastSpellByName(GetSpellInfo(PQ_Horn), &amp;quot;player&amp;quot;)
+	return true
+end</Lua><RecastDelay>0</RecastDelay><Target>Target</Target><CancelChannel>False</CancelChannel><SkipUnknown>True</SkipUnknown></Ability><Ability><Name>[2H] Obliterate (KM)</Name><Default>false</Default><SpellID>0</SpellID><Actions></Actions><Lua>local PQ_Obliterate = PQ_Obliterate
+local PQ_KillingMachine = PQ_KillingMachine
+local TargetValidationMelee = TargetValidationMelee
+
+if PQ_CanCast
+and OffhandHasWeapon() == nil
+and UseAoE == false
+and UnitBuffID(&amp;quot;player&amp;quot;, PQ_KillingMachine)
+and TargetValidationMelee(&amp;quot;target&amp;quot;, PQ_Obliterate) then
+	CastSpellByName(GetSpellInfo(PQ_Obliterate), &amp;quot;target&amp;quot;)
+	return true
+end</Lua><RecastDelay>0</RecastDelay><Target>Target</Target><CancelChannel>False</CancelChannel><SkipUnknown>True</SkipUnknown></Ability><Ability><Name>[2H] Unholy Blight (no BP or no FF)</Name><Default>false</Default><SpellID>0</SpellID><Actions></Actions><Lua>local PQ_FrostFever = PQ_FrostFever
+local PQ_BloodPlague = PQ_BloodPlague
+local PQ_UnholyBlight = PQ_UnholyBlight
+local TargetValidation = TargetValidation
+
+if PQ_CanCast == false or not IsSpellKnown(PQ_UnholyBlight) then return false end
+
+local FF,_,_,_,_,_,FFtimer = UnitDebuffID(&amp;quot;target&amp;quot;,PQ_FrostFever,&amp;quot;player&amp;quot;)
+local BP,_,_,_,_,_,BPtimer = UnitDebuffID(&amp;quot;target&amp;quot;,PQ_BloodPlague,&amp;quot;player&amp;quot;)
+
+if not BP or not FF then
+	if UseAoE == false
+	   and OffhandHasWeapon() == nil
+	   and UseDWRotation == false
+	   and TargetValidation(&amp;quot;target&amp;quot;, PQ_UnholyBlight) then
+		CastSpellByName(GetSpellInfo(PQ_UnholyBlight), &amp;quot;player&amp;quot;)
+		PQ_ShouldPestilence = false
+		return true
+	end
+end</Lua><RecastDelay>0</RecastDelay><Target>Target</Target><CancelChannel>False</CancelChannel><SkipUnknown>True</SkipUnknown></Ability><Ability><Name>[All] Pillar of Frost</Name><Default>false</Default><SpellID>0</SpellID><Actions></Actions><Lua>local PQ_Pillar = PQ_Pillar
+local PQ_PlagueStrike = PQ_PlagueStrike
+local TargetValidation = TargetValidation
+
+if PQ_CanCast
+   and PQR_SpellAvailable(PQ_Pillar)
+   and UseCD == true
+   and IsSpellInRange(GetSpellInfo(PQ_PlagueStrike), &amp;quot;target&amp;quot;) == 1 then
+
+	if PQ_HasEngineering == true then
+		RunMacroText(&amp;quot;/use 10&amp;quot;)
+	end
+
+	CastSpellByName(GetSpellInfo(PQ_Pillar), &amp;quot;player&amp;quot;)
+	return true
+end</Lua><RecastDelay>0</RecastDelay><Target>Target</Target><CancelChannel>False</CancelChannel><SkipUnknown>True</SkipUnknown></Ability><Ability><Name>[All] Plague Leech</Name><Default>false</Default><SpellID>0</SpellID><Actions></Actions><Lua>local PQ_PlagueLeech = PQ_PlagueLeech
+local PQ_FrostFever = PQ_FrostFever
+local PQ_BloodPlague = PQ_BloodPlague
+local PQ_Outbreak = PQ_Outbreak
+local TargetValidation = TargetValidation
+
+if not PQR_SpellAvailable(PQ_PlagueLeech) then return false end
+if FullyDepleted == 0 or not IsSpellKnown(PQ_PlagueLeech) then return false end
+
+local FF,_,_,_,_,_,FFtimer = UnitDebuffID(&amp;quot;target&amp;quot;,PQ_FrostFever,&amp;quot;player&amp;quot;)
+local BP,_,_,_,_,_,BPtimer = UnitDebuffID(&amp;quot;target&amp;quot;,PQ_BloodPlague,&amp;quot;player&amp;quot;)
+
+if PQ_CanCast
+and FF and BP	
+and TargetValidation(&amp;quot;target&amp;quot;, PQ_PlagueLeech) then
+	CastSpellByName(GetSpellInfo(PQ_PlagueLeech), &amp;quot;target&amp;quot;)
+	return true
+end</Lua><RecastDelay>0</RecastDelay><Target>Target</Target><CancelChannel>False</CancelChannel><SkipUnknown>True</SkipUnknown></Ability><Ability><Name>[Misc] PQI</Name><Default>false</Default><SpellID>0</SpellID><Actions></Actions><Lua>if HYDRO == nil 
+	then 
+		local config = {
+		name	= &amp;apos;2H Frost&amp;apos;,
+		author	= &amp;apos;Hydro&amp;apos;,
+		abilities = {
+		{ 	name = &amp;quot;AoE Rotation&amp;quot;,			newSection = true,
+			enable = true,
+			tooltip = &amp;quot;Enable AoE Rotation.&amp;quot;,
+		},
+		{ 	name = &amp;quot;Healthstone&amp;quot;,			newSection = true,
+			enable = true,
+			tooltip = &amp;quot;Use Healthstones if available.&amp;quot;,
+			widget = { type = &amp;apos;numBox&amp;apos;,
+				value = 45,
+				step = 5,
+			},
+		},
+		{ 	name = &amp;quot;Anti Magic Shell&amp;quot;,		newSection = false,
+			enable = true,
+			tooltip = &amp;quot;Use Anti-Magic Shell.&amp;quot;,
+			widget = { type = &amp;apos;numBox&amp;apos;,
+				value = 100,
+				step = 5,
+			},
+		},
+		{ 	name = &amp;quot;Flasks&amp;quot;,				newSection = false,
+			enable = true,
+			tooltip = &amp;quot;Use Flasks.&amp;quot;,
+		},	
+		{ 	name = &amp;quot;Potions&amp;quot;,				newSection = false,
+			enable = true,
+			tooltip = &amp;quot;Use Potions if needed.&amp;quot;,
+			widget = { type = &amp;apos;numBox&amp;apos;,
+				value = 40,
+				step = 5,
+			},
+		},		
+		{ 	name = &amp;quot;Trinket 1&amp;quot;,				newSection = true,
+			enable = true,
+			tooltip = &amp;quot;Use Trinket 1.&amp;quot;,
+			widget = { type = &amp;apos;numBox&amp;apos;,
+				value = 40,
+				step = 5,
+			},
+		},		
+		{ 	name = &amp;quot;Trinket 2&amp;quot;,				newSection = false,
+			enable = true,
+			tooltip = &amp;quot;Use Trinket 2.&amp;quot;,
+			widget = { type = &amp;apos;numBox&amp;apos;,
+				value = 40,
+				step = 5,
+			},
+		},		
+		{ 	name = &amp;quot;Gloves&amp;quot;,				newSection = false,
+			enable = false,
+			tooltip = &amp;quot;Use Glove ability.&amp;quot;,
+		},
+		{ 	name = &amp;quot;Boss Mechanics&amp;quot;,		newSection = true,
+			enable = false,
+			tooltip = &amp;quot;Use Boss Mechanics (Under Development).&amp;quot;,
+		},
+		{ 	name = &amp;quot;CD Enable&amp;quot;,				newSection = false,
+			enable = true,
+			tooltip = &amp;quot;Enable CD´s.&amp;quot;,
+		},
+		{ 	name = &amp;quot;CD Boss Only&amp;quot;,			newSection = false,
+			enable = true,
+			tooltip = &amp;quot;Use CD´s only on bosses.&amp;quot;,
+		},
+		{ 	name	= &amp;quot;Raise Ally&amp;quot;,
+			tooltip = &amp;quot;When enabled; Allows you to select how you want Raise Ally used.&amp;quot;,
+			enable	= true,
+			widget	= { type = &amp;quot;select&amp;quot;,
+			tooltip = &amp;quot;Select Raise Ally logic. Use on Raid or Party Members, or only on Tanks/Healers (Requires Roles to be set!)&amp;quot;,
+				values	= {
+					&amp;quot;Raid/Party&amp;quot;,
+					&amp;quot;Tank/Healer&amp;quot;,
+					},
+				width	= 100,
+			},
+		},
+		{ 	name = &amp;quot;Tier 4 Talent&amp;quot;,			newSection = false,
+			enable = true,
+			tooltip = &amp;quot;Use Tier 4 Talent.&amp;quot;,
+			widget = { type = &amp;apos;numBox&amp;apos;,
+				value = 100,
+				step = 5,
+			},
+		},
+		},
+		hotkeys = {
+			{	name = &amp;quot;Tier 6 Talent&amp;quot;,			enable = true,	hotkeys = {	&amp;apos;rc&amp;apos;	},	},
+            {	name = &amp;quot;Anti Magic Zone&amp;quot;,		enable = true,	hotkeys = {	&amp;apos;la&amp;apos; 	},	},
+			{	name = &amp;quot;PotionBuff&amp;quot;,			enable = true,	hotkeys = {	&amp;apos;rs&amp;apos;	},	},
+		    {	name = &amp;quot;Death and Decay&amp;quot;,		enable = true,	hotkeys = {	&amp;apos;ls&amp;apos; 	},	},
+			{	name = &amp;quot;Pause&amp;quot;,					enable = true,	hotkeys = {	&amp;apos;ls&amp;apos;	},
+												tooltip = &amp;quot;Keep pressed!&amp;quot;	},
+		},
+	}
+HYDRO = PQI:AddRotation(config)
+end
+
+UseAMS                  = PQI_Hydro2HFrost_AntiMagicShell_enable
+UseAMSValue             = PQI_Hydro2HFrost_AntiMagicShell_value
+UseAMZ                  = PQI_Hydro2HFrost_AntiMagicZone_enable
+UseAMZKey               = PQI_Hydro2HFrost_AntiMagicZone_key
+UseBossMechanics		= PQI_Hydro2HFrost_BossMechanics_enable
+UseCDBoss 				= PQI_Hydro2HFrost_CDBossOnly_enable
+UseCD					= PQI_Hydro2HFrost_CDEnable_enable
+UseRaiseAlly			= PQI_Hydro2HFrost_RaiseAlly_enable
+UseRaiseAllyValue		= PQI_Hydro2HFrost_RaiseAlly_value
+
+UseDnD	             	= PQI_Hydro2HFrost_DeathandDecay_enable
+UseDnDKey             	= PQI_Hydro2HFrost_DeathandDecay_key
+UseBurst				= PQI_Hydro2HFrost_OpeningBurst_enable
+UseBurstKey				= PQI_Hydro2HFrost_OpeningBurst_key
+
+UseTier4Talent			= PQI_Hydro2HFrost_Tier4Talent_enable
+UseTier4TalentValue		= PQI_Hydro2HFrost_Tier4Talent_value
+UseTier4TalentKey		= PQI_Hydro2HFrost_Tier4Talent_key
+UseTier6Talent			= PQI_Hydro2HFrost_Tier6Talent_enable
+UseTier6TalentKey		= PQI_Hydro2HFrost_Tier6Talent_key
+
+UseFlask	 			= PQI_Hydro2HFrost_Flasks_enable
+UseHealthstone 			= PQI_Hydro2HFrost_Healthstone_enable
+UseHealthstoneValue 	= PQI_Hydro2HFrost_Healthstone_value
+UsePotionBuff			= PQI_Hydro2HFrost_PotionBuff_enable
+UsePotionBuffKey		= PQI_Hydro2HFrost_PotionBuff_key
+UsePotions	 			= PQI_Hydro2HFrost_Potions_enable
+UsePotionsValue 		= PQI_Hydro2HFrost_Potions_value
+UseGloves 				= PQI_Hydro2HFrost_Gloves_enable
+UseTrinket1 			= PQI_Hydro2HFrost_Trinket1_enable
+UseTrinket1Value		= PQI_Hydro2HFrost_Trinket1_value
+UseTrinket2				= PQI_Hydro2HFrost_Trinket2_enable
+UseTrinket2Value		= PQI_Hydro2HFrost_Trinket2_value
+
+UseAoE			       	= PQI_Hydro2HFrost_AoERotation_enable
+UsePauseEnabled			= PQI_Hydro2HFrost_Pause_enable
+UsePauseKey				= PQI_Hydro2HFrost_Pause_key</Lua><RecastDelay>0</RecastDelay><Target>Target</Target><CancelChannel>False</CancelChannel><SkipUnknown>True</SkipUnknown></Ability><Ability><Name>[All] Plague Leech (BP &amp;lt; 1 or FF &amp;lt; 1)</Name><Default>false</Default><SpellID>0</SpellID><Actions></Actions><Lua>local PQ_PlagueLeech = PQ_PlagueLeech
+local PQ_FrostFever = PQ_FrostFever
+local PQ_BloodPlague = PQ_BloodPlague
+local TargetValidation = TargetValidation
+
+if not PQR_SpellAvailable(PQ_PlagueLeech) then return false end
+if FullyDepleted == 0 or not IsSpellKnown(PQ_PlagueLeech) then return false end
+
+local FF,_,_,_,_,_,FFtimer = UnitDebuffID(&amp;quot;target&amp;quot;,PQ_FrostFever,&amp;quot;player&amp;quot;)
+local BP,_,_,_,_,_,BPtimer = UnitDebuffID(&amp;quot;target&amp;quot;,PQ_BloodPlague,&amp;quot;player&amp;quot;)
+
+if PQ_CanCast
+   and FF and BP then	
+	if (BPtimer - GetTime() &amp;lt; 1.3
+	or FFtimer - GetTime() &amp;lt; 1.3)
+	and TargetValidation(&amp;quot;target&amp;quot;, PQ_PlagueLeech) then
+		CastSpellByName(GetSpellInfo(PQ_PlagueLeech), &amp;quot;target&amp;quot;)
+		return true
+	end
+end</Lua><RecastDelay>0</RecastDelay><Target>Target</Target><CancelChannel>False</CancelChannel><SkipUnknown>True</SkipUnknown></Ability><Ability><Name>[Item] Potion</Name><Default>false</Default><SpellID>0</SpellID><Actions></Actions><Lua>local HealthFrame = tonumber(UsePotionsValue)
+local PlayerCombat = UnitAffectingCombat(&amp;quot;player&amp;quot;) 
+if not PlayerCombat then return false end
+
+if UsePotionBuff == true
+	and PQ_CanCast
+    and PQI:IsHotkeys(UsePotionBuffKey)
+    and GetItemCount(76095,false,true) &amp;gt; 0 -- Potion of Mogu Power
+	and GetItemCooldown(76095) == 0
+then
+	UseItemByName(76095)
+end
+
+local PlayerHp = PlayerHp
+if UsePotions == true
+	and PQ_CanCast
+	and GetItemCount(76097,false,true) &amp;gt; 0 -- Master Healing Potion
+	and PlayerHp &amp;lt; HealthFrame
+	and GetItemCooldown(76097) == 0
+then
+	UseItemByName(76097)
+elseif UsePotions == true
+	and PQ_CanCast
+	and GetItemCount(76094,false,true) &amp;gt; 0 -- Alchemist&amp;apos;s Rejuvenation
+	and PlayerHp &amp;lt; HealthFrame
+	and GetItemCooldown(76094) == 0
+then
+	UseItemByName(76094)
+end</Lua><RecastDelay>0</RecastDelay><Target>Player</Target><CancelChannel>False</CancelChannel><SkipUnknown>True</SkipUnknown></Ability><Ability><Name>[Item] Flask</Name><Default>false</Default><SpellID>0</SpellID><Actions></Actions><Lua>if UseFlask ~= true then return false end
+local PlayerCombat = UnitAffectingCombat(&amp;quot;player&amp;quot;) 
+if not PlayerCombat then return false end
+
+if UnitBuffID(&amp;quot;player&amp;quot;, 105696) ~= nil then return false end
+if PQ_CanCast
+   and GetItemCount(76088,false,true) &amp;gt; 0 -- Flask of Winter&amp;apos;s Bite
+   and GetItemCooldown(76088) == 0
+then
+	UseItemByName(76088)
+end</Lua><RecastDelay>0</RecastDelay><Target>Player</Target><CancelChannel>False</CancelChannel><SkipUnknown>True</SkipUnknown></Ability><Ability><Name>[Item] Trinkets</Name><Default>false</Default><SpellID>0</SpellID><Actions></Actions><Lua>local PlayerCombat = UnitAffectingCombat(&amp;quot;player&amp;quot;) 
+if not PlayerCombat then return false end
+
+local PlayerHp = PlayerHp
+	
+-- [MISC] Trinkets
+if (UseTrinket1 ~= true
+and UseTrinket2 ~= true
+and UseGloves ~= true)
+then return false end
+
+----------------
+-- TRINKET 01 --
+----------------
+local HealthFrame = tonumber(UseTrinket1Value)
+if UseTrinket1 == true
+and PQ_CanCast
+and PlayerHp &amp;lt;= HealthFrame
+and GetInventoryItemCooldown(&amp;quot;player&amp;quot;,13) == 0
+then
+	UseInventoryItem(13)
+end
+
+----------------
+-- TRINKET 02 --
+----------------
+local HealthFrame = tonumber(UseTrinket2Value)
+if UseTrinket2 == true
+and PQ_CanCast
+and PlayerHp &amp;lt;= HealthFrame
+and GetInventoryItemCooldown(&amp;quot;player&amp;quot;,14) == 0
+then
+	UseInventoryItem(14)
+end
+
+------------
+-- GLOVES --
+------------
+if UseGloves == true
+and PQ_CanCast
+and GetInventoryItemCooldown(&amp;quot;player&amp;quot;,10) == 0
+then
+	UseInventoryItem(10)
+end</Lua><RecastDelay>0</RecastDelay><Target>Target</Target><CancelChannel>False</CancelChannel><SkipUnknown>True</SkipUnknown></Ability><Ability><Name>[Tier] 6 Talent</Name><Default>false</Default><SpellID>0</SpellID><Actions></Actions><Lua>if not UseTier6Talent then return false end
+
+if PQ_CanCast
+   and PQI:IsHotkeys(UseTier6TalentKey) then
+	if PQR_SpellAvailable(108200)
+	then
+		CastSpellByName(GetSpellInfo(108200),&amp;quot;player&amp;quot;)
+		return true	
+	end
+	if PQ_CanCast
+    and PQR_SpellAvailable(108199)
+	then
+		CastSpellByName(GetSpellInfo(108199),&amp;quot;player&amp;quot;)
+		return true	
+	end
+	if PQ_CanCast
+    and PQR_SpellAvailable(108198)
+	then
+		CastSpellByName(GetSpellInfo(108198),&amp;quot;player&amp;quot;)
+		return true	
+	end
+end</Lua><RecastDelay>0</RecastDelay><Target>Target</Target><CancelChannel>False</CancelChannel><SkipUnknown>True</SkipUnknown></Ability><Ability><Name>[Tier] 4 Talent</Name><Default>false</Default><SpellID>0</SpellID><Actions></Actions><Lua>if not UseTier4Talent then return false end
+local PlayerHp = PlayerHp
+local PQ_DeathPact = PQ_DeathPact
+local PQ_DeathSiphon = PQ_DeathSiphon
+local PQ_Conversion = PQ_Conversion
+local _,ghoul = GetTotemInfo(1)
+local HealthFrame = tonumber(UseTier4TalentValue)
+
+if PQ_CanCast
+   and PQR_SpellAvailable(PQ_DeathPact)
+   and ghoul ~= nil
+   and ghoul ~= &amp;quot;&amp;quot;
+   and PlayerHp &amp;lt;= HealthFrame then
+       CastSpellByName(GetSpellInfo(PQ_DeathPact))
+   return true
+end
+if PQ_CanCast
+   and IsSpellKnown(PQ_DeathSiphon)
+   and PQR_SpellAvailable(PQ_DeathSiphon) then
+	   CastSpellByName(GetSpellInfo(PQ_DeathSiphon), &amp;quot;target&amp;quot;)
+   return true
+end
+if PQ_CanCast
+   and PQR_SpellAvailable(PQ_Conversion)
+   and RunicPower &amp;gt; 20
+   and not UnitBuffID(&amp;quot;player&amp;quot;, PQ_Conversion) then
+       CastSpellByName(GetSpellInfo(PQ_Conversion))
+   return true
+end</Lua><RecastDelay>0</RecastDelay><Target>Target</Target><CancelChannel>False</CancelChannel><SkipUnknown>True</SkipUnknown></Ability><Ability><Name>[Raid] Tier 14</Name><Default>false</Default><SpellID>0</SpellID><Actions></Actions><Lua>local PQ_IcyTouch = PQ_IcyTouch
+local PQ_ImpalingSpear = PQ_ImpalingSpear
+local PQ_AMS = PQ_AMS
+local TryPurge = true
+
+--Implement PQR_resumeAttack.. this is used to prevent
+--abilities lower in the rotation from being cast.
+if PQR_resumeAttack == nil then
+    PQR_resumeAttack = 0
+elseif PQR_resumeAttack &amp;gt; GetTime() then
+    return true
+else
+    PQR_resumeAttack = 0
+end
+
+
+--IMPORTANT: Change this if you have any cleaves that would do damage to a secondary target
+--as part of your single target rotation. Better to be safe than sorry! 
+--Used for : Spirit Kings
+local cleaveClass = true
+local isAOE = strmatch(strupper(PQR_RotationName), &amp;quot;AOE&amp;quot;) --checks if we are in AOE mode.
+
+for i=1,4 do
+    local bossCheck = &amp;quot;boss&amp;quot;..i
+
+    if UnitExists(bossCheck) then
+        local npcID = tonumber(UnitGUID(bossCheck):sub(6,10), 16)
+        local bossCasting,_,_,_,_,castEnd = UnitCastingInfo(bossCheck)
+        local icyPurge = GlyphCheck(58631)
+        
+        ------------------------------------------------------------
+        ----------------------- Tier 14 Raids ----------------------
+        ------------------------------------------------------------
+        
+        if npcID == 62837 then -- Grand Empress Shek&amp;apos;zeer
+        
+        	local vision = select(7, UnitDebuffID(&amp;quot;player&amp;quot;, 124862)) -- Vision of Demise
+        
+        	if vision and vision - GetTime() &amp;lt;= 2
+        	and PQR_SpellAvailable(PQ_AMS) then
+        		CastSpellByName(GetSpellInfo(PQ_AMS), &amp;quot;player&amp;quot;)
+        		return true
+        	end
+        	
+        	if PQ_PlayerRace == &amp;quot;Human&amp;quot;
+        	and UnitDebuffID(&amp;quot;player&amp;quot;, 124863) -- Vision of Demise Proc
+        	and PQR_SpellAvailable(PQ_EveryManForHimself) then
+        		CastSpellByName(GetSpellInfo(PQ_EveryManForHimself), &amp;quot;player&amp;quot;)
+        		return true
+        	end
+        
+        elseif npcID == 62397 then -- Wind Lord Mel&amp;apos;jarak
+        	local mending = GetSpellInfo(122193)
+        	
+        	if UnitExists(&amp;quot;focus&amp;quot;) then
+        		local impalingDebuff = select(7, UnitDebuffID(&amp;quot;focus&amp;quot;, PQ_ImpalingSpear, &amp;quot;player&amp;quot;))
+        		
+        		if impalingDebuff and impalingDebuff - GetTime() &amp;lt; 5 then
+        			if PQ_CanCast
+        			and PQ_CanImpalingSpear then
+        				if GetSpellInfo(PQ_ImpalingSpear) == UnitCastingInfo(&amp;quot;player&amp;quot;) then
+        					return true -- pause rotation while casting Impaling Spear
+        				end
+        				RunMacroText(&amp;quot;/target [@focus]&amp;quot;)
+        				RunMacroText(&amp;quot;/click ExtraActionButton1&amp;quot;)
+        				RunMacroText(&amp;quot;/targetlasttarget&amp;quot;)
+        				return true
+        			end
+        		end
+        		
+        		if UnitCastingInfo(&amp;quot;focus&amp;quot;) == mending
+        		and PQ_CanCast
+        		and PQR_SpellAvailable(PQ_MindFreeze) then
+        			CastSpellByName(GetSpellInfo(PQ_MindFreeze), &amp;quot;focus&amp;quot;)
+        			return true
+        		end
+       		end
+       		
+       		if UnitCastingInfo(&amp;quot;target&amp;quot;) == mending
+       		and PQ_CanCast
+       		and PQR_SpellAvailable(PQ_MindFreeze) then
+       			CastSpellByName(GetSpellInfo(PQ_MindFreeze), &amp;quot;target&amp;quot;)
+        		return true
+       		end
+       		
+       		if UnitExists(&amp;quot;mouseover&amp;quot;)
+       		and PQ_CanCast
+       		and UnitCastingInfo(&amp;quot;mouseover&amp;quot;) == mending
+       		and PQR_SpellAvailable(PQ_MindFreeze) then
+       			CastSpellByName(GetSpellInfo(PQ_MindFreeze), &amp;quot;mouseover&amp;quot;)
+        		return true
+       		end
+       		
+       		if PQ_PlayerRace == &amp;quot;Human&amp;quot;
+        	and UnitDebuffID(&amp;quot;player&amp;quot;, 121885) -- Amber Prison
+        	and PQR_SpellAvailable(PQ_EveryManForHimself) then
+        		CastSpellByName(GetSpellInfo(PQ_EveryManForHimself), &amp;quot;player&amp;quot;)
+        		return true
+        	end
+        
+       	elseif npcID == 62983 then -- Lei Shi
+        
+        	if UnitBuffID(&amp;quot;target&amp;quot;, 123250)
+        	and PQ_CanCast
+        	and UnitIsUnit(&amp;quot;target&amp;quot;, bossCheck) then
+        		return true
+        	end
+        
+      	elseif npcID == 60583 or npcID == 60583 or npcID == 60585 then -- Protectors
+        
+        	local prison = select(7, UnitDebuffID(&amp;quot;player&amp;quot;, 111850)) -- Lightning Prison
+        
+        	if prison and prison - GetTime() &amp;lt;= 2
+        	and PQR_SpellAvailable(PQ_AMS) then
+        		CastSpellByName(GetSpellInfo(PQ_AMS), &amp;quot;player&amp;quot;)
+        		return true
+        	end
+        	
+        	if PQ_PlayerRace == &amp;quot;Human&amp;quot;
+        	and UnitDebuffID(&amp;quot;player&amp;quot;, 117436) -- Lightning Prison
+        	and PQR_SpellAvailable(PQ_EveryManForHimself) then
+        		CastSpellByName(GetSpellInfo(PQ_EveryManForHimself), &amp;quot;player&amp;quot;)
+        		return true
+        	end
+        	
+        	if icyPurge == true
+        	and PQ_CanCast
+        	and UnitBuffID(bossCheck, 117283) -- Cleansing Waters
+        	and TargetValidationMelee(bossCheck, PQ_IcyTouch)
+        	and TryPurge == true then
+        		CastSpellByName(GetSpellInfo(PQ_IcyTouch), bossCheck)
+        		return true
+        	end
+        
+        elseif npcID == 62511 or npcID == 62711 then --Amber-Shaper Un&amp;apos;sok or Amber Monstrosity
+            local reshapeLife = UnitDebuffID(&amp;quot;player&amp;quot;, 122370)
+            
+            if reshapeLife then
+                local playerCasting = UnitCastingInfo(&amp;quot;player&amp;quot;)
+                --grab spell names for abilities:
+                local amberExplosion = GetSpellInfo(122402)
+                
+                --interrupt self if casting amber explosion
+                if playerCasting == amberExplosion then
+                    --Press the 2nd button (Struggle for Control)
+                    RunMacroText(&amp;quot;/click &amp;quot;..PQR_OverrideActionBarButton2)
+                    return true
+                end
+                
+                --interrupt the target if casting amber explosion
+                if bossCasting and bossCasting == amberExplosion then
+                    TargetUnit(bossCheck)
+                    --Press the 1st button (Amber Strike)
+                    RunMacroText(&amp;quot;/click &amp;quot;..PQR_OverrideActionBarButton1)
+                    return true
+                end
+                
+                if UnitExists(&amp;quot;boss2&amp;quot;) then
+                    if bossCheck == &amp;quot;boss2&amp;quot; then 
+                        return true --prevent the rotation from executing while reshaped
+                    end
+                else
+                    return true
+                end
+
+            end
+            
+            if UnitBuffID(&amp;quot;target&amp;quot;, 122540) then -- Amber Carapace
+        		return true
+        	end
+            
+        elseif npcID == 60709 then --Spirit Kings: Qiang. (Impervious Shield)
+            --Stop all attacks until 0.2 seconds after cast time ends and until buff (Impervious Shield) is gone.
+            
+            --only continue checking if we are targetting the boss or have no target.
+            if (not UnitExists(&amp;quot;target&amp;quot;)) or (UnitIsUnit(&amp;quot;target&amp;quot;, bossCheck)) or (cleaveClass or isAOE) then
+                local impName = GetSpellInfo(117961)
+                local impShieldBuff = UnitBuffID(bossCheck, 117961)
+                
+                if (bossCasting and bossCasting == impName) then
+                	local delayAdd = (castEnd/1000) - GetTime() --the number of seconds remaining on the cast.
+                	if (delayAdd &amp;lt;= 0.5) then
+                   		StopAttack()
+                    	SpellStopCasting()
+                    	PQR_resumeAttack = GetTime() + delayAdd + 0.2
+                    	return true
+                    end
+                    return false
+                end
+                
+                if impShieldBuff then
+                    StopAttack()
+                    SpellStopCasting()
+                    return true
+                end
+            end
+            
+        elseif npcID == 60710 then --Spirit Kings: Subetai. (Sleight of Hand)
+            --Stop all attacks when casting Sleight of Hand, and until 0.2 seconds after cast time ends.
+            --Also stop attacks if not stunned.
+            
+            --only continue checking if we are targetting the boss or have no target.
+            if (not UnitExists(&amp;quot;target&amp;quot;)) or (UnitIsUnit(&amp;quot;target&amp;quot;, bossCheck)) or (cleaveClass or isAOE) then
+                local sleightName = GetSpellInfo(118162)
+                local sleightBuff = UnitBuffID(bossCheck, 118162)
+                --                  HoJ,   FoJ,  Kidney  
+                local stunList = { 853, 105593, 408 }
+                local isStunned = nil
+                for _,v in ipairs(stunList) do
+                    local debuffCheck = UnitDebuffID(bossCheck, v)
+                    if debuffCheck then
+                        isStunned = true
+                        break
+                    end
+                end
+                
+                if (bossCasting and bossCasting == sleightName) then
+                	local delayAdd = (castEnd/1000) - GetTime() --the number of seconds remaining on the cast.
+                	if (delayAdd &amp;lt;= 0.5) then
+                   		StopAttack()
+                    	SpellStopCasting()
+                    	PQR_resumeAttack = GetTime() + delayAdd + 0.2
+                    	return true
+                    end
+                    return false
+                end
+                
+                if sleightBuff and not isStunned then
+                    StopAttack()
+                    SpellStopCasting()
+                    return true
+                end
+            end
+
+        elseif npcID == 60701 then --Spirit Kings: Zian. (Shield of Darkness)
+            --Stop all attacks until 0.5 seconds after cast time ends and until buff (Shield of Darkness) is gone.
+                        
+            if (not UnitExists(&amp;quot;target&amp;quot;)) or (UnitIsUnit(&amp;quot;target&amp;quot;, bossCheck)) or (cleaveClass or isAOE) then
+                local sodName = GetSpellInfo(117697)
+                local sodBuff = UnitBuffID(bossCheck, 117697)
+                
+                if (bossCasting and bossCasting == sodName) then
+                	local delayAdd = (castEnd/1000) - GetTime() --the number of seconds remaining on the cast.
+                	if (delayAdd &amp;lt;= 0.5) then
+                   		StopAttack()
+                    	SpellStopCasting()
+                    	PQR_resumeAttack = GetTime() + delayAdd + 0.4
+                    	return true
+                    end
+                    return false
+                end
+                
+                if sodBuff then
+                    StopAttack()
+                    SpellStopCasting()
+                    return true
+                end
+            end
+        end
+    end
+end
+
+local returnSoul = select(7 ,UnitDebuffID(&amp;quot;player&amp;quot;, 116161))
+if returnSoul and returnSoul - GetTime() &amp;lt;= 2 then 
+    RunMacroText(&amp;quot;/click ExtraActionButton1&amp;quot;) 
+end</Lua><RecastDelay>0</RecastDelay><Target>Target</Target><CancelChannel>False</CancelChannel><SkipUnknown>True</SkipUnknown></Ability><Ability><Name>[AOE] Frost Strike (RP &amp;gt; 76)</Name><Default>false</Default><SpellID>0</SpellID><Actions></Actions><Lua>local PQ_FrostStrike = PQ_FrostStrike
+local TargetValidationMelee = TargetValidationMelee
+
+if PQ_CanCast
+and UseAoE == true
+and TargetValidationMelee(&amp;quot;target&amp;quot;, PQ_FrostStrike)
+and RunicPower &amp;gt; 76 then
+	CastSpellByName(GetSpellInfo(PQ_FrostStrike), &amp;quot;target&amp;quot;)
+	return true
+end</Lua><RecastDelay>0</RecastDelay><Target>Target</Target><CancelChannel>False</CancelChannel><SkipUnknown>True</SkipUnknown></Ability><Ability><Name>[AOE] Death and Decay</Name><Default>false</Default><SpellID>0</SpellID><Actions></Actions><Lua>local PQ_HowlingBlast = PQ_HowlingBlast
+local PQ_DnD = PQ_DnD
+
+if PQ_CanCast
+   and UseAoE == true
+   and UnholyRunes == 2
+   and PQR_SpellAvailable(PQ_DnD)
+   and IsSpellInRange(GetSpellInfo(PQ_HowlingBlast), &amp;quot;target&amp;quot;) == 1 then
+	   CastSpellByName(GetSpellInfo(PQ_DnD),nil)
+	if SpellIsTargeting() then SpellCancelQueuedSpell() CameraOrSelectOrMoveStart() CameraOrSelectOrMoveStop() end
+	return true
+end</Lua><RecastDelay>0</RecastDelay><Target>Player</Target><CancelChannel>False</CancelChannel><SkipUnknown>True</SkipUnknown></Ability><Ability><Name>[AOE] Plague Strike</Name><Default>false</Default><SpellID>0</SpellID><Actions></Actions><Lua>local PQ_PlagueStrike = PQ_PlagueStrike
+local PQ_BloodPlague = PQ_BloodPlague
+local TargetValidation = TargetValidation
+
+if PQ_CanCast
+and UseAoE == true
+and UnholyRunes == 2
+and TargetValidation(&amp;quot;target&amp;quot;, PQ_PlagueStrike) then
+	CastSpellByName(GetSpellInfo(PQ_PlagueStrike), &amp;quot;target&amp;quot;)
+	PQ_ShouldPestilence = true
+	return true
+end</Lua><RecastDelay>0</RecastDelay><Target>Target</Target><CancelChannel>False</CancelChannel><SkipUnknown>True</SkipUnknown></Ability><Ability><Name>[AOE] Pestilence</Name><Default>false</Default><SpellID>0</SpellID><Actions></Actions><Lua>local PQ_Pestilence = PQ_Pestilence
+local PQ_FrostFever = PQ_FrostFever
+local PQ_BloodPlague = PQ_BloodPlague
+local TargetValidationMelee = TargetValidationMelee
+
+if PQ_CanCast
+and UseAoE == true
+and v == 2
+and PQ_ShouldPestilence == true
+and UnitDebuffID(&amp;quot;target&amp;quot;,PQ_FrostFever,&amp;quot;player&amp;quot;)
+and UnitDebuffID(&amp;quot;target&amp;quot;,PQ_BloodPlague,&amp;quot;player&amp;quot;)
+and TargetValidationMelee(&amp;quot;target&amp;quot;, PQ_Pestilence) then
+	CastSpellByName(GetSpellInfo(PQ_Pestilence), &amp;quot;target&amp;quot;)
+	return true
+end</Lua><RecastDelay>0</RecastDelay><Target>Target</Target><CancelChannel>False</CancelChannel><SkipUnknown>True</SkipUnknown></Ability><Ability><Name>[AOE] Howling Blast</Name><Default>false</Default><SpellID>0</SpellID><Actions></Actions><Lua>local PQ_HowlingBlast = PQ_HowlingBlast
+local PQ_Rime = PQ_Rime
+local TargetValidation = TargetValidation
+
+if PQ_CanCast
+and UseAoE == true
+and (FrostRunes &amp;gt;= 1 or DeathRunes &amp;gt;= 1)
+and TargetValidation(&amp;quot;target&amp;quot;, PQ_HowlingBlast) then
+	CastSpellByName(GetSpellInfo(PQ_HowlingBlast), &amp;quot;target&amp;quot;)
+	return true
+end</Lua><RecastDelay>0</RecastDelay><Target>Target</Target><CancelChannel>False</CancelChannel><SkipUnknown>True</SkipUnknown></Ability><Ability><Name>[DW] Howling Blast ( 2D or 2F)</Name><Default>false</Default><SpellID>0</SpellID><Actions></Actions><Lua>local PQ_HowlingBlast = PQ_HowlingBlast
+local TargetValidation = TargetValidation
+
+if PQ_CanCast
+and OffhandHasWeapon() == 1
+and UseAoE == true
+and (FrostRunes == 2 or DeathRunes &amp;gt;= 2)
+and TargetValidation(&amp;quot;target&amp;quot;, PQ_HowlingBlast) then
+	CastSpellByName(GetSpellInfo(PQ_HowlingBlast), &amp;quot;target&amp;quot;)
+	return true
+end</Lua><RecastDelay>0</RecastDelay><Target>Target</Target><CancelChannel>False</CancelChannel><SkipUnknown>True</SkipUnknown></Ability><Ability><Name>[DW] Soul Reaper (TH &amp;lt; 35)</Name><Default>false</Default><SpellID>0</SpellID><Actions></Actions><Lua>local PQ_SoulReaper = PQ_SoulReaper
+local TargetValidationMelee = TargetValidationMelee
+
+if PQ_CanCast
+and OffhandHasWeapon() == 1
+and UseAoE == false
+and TargetHp &amp;lt;= 35
+and TargetValidationMelee(&amp;quot;target&amp;quot;, PQ_SoulReaper) then
+	CastSpellByName(GetSpellInfo(PQ_SoulReaper), &amp;quot;target&amp;quot;)
+	return true
+end</Lua><RecastDelay>0</RecastDelay><Target>Target</Target><CancelChannel>False</CancelChannel><SkipUnknown>True</SkipUnknown></Ability><Ability><Name>[DW] Howling Blast (No Debuff)</Name><Default>false</Default><SpellID>0</SpellID><Actions></Actions><Lua>local PQ_HowlingBlast = PQ_HowlingBlast
+local PQ_FrostFever = PQ_FrostFever
+local TargetValidation = TargetValidation
+
+if UnitBuffID(&amp;quot;player&amp;quot;, PQ_UnholyBlight) then return false end
+
+if PQ_CanCast
+and OffhandHasWeapon() == 1
+and UseAoE == false
+and (FrostRunes &amp;gt;= 1 or DeathRunes &amp;gt;= 1)
+and PQ_OutbreakCD - GetTime() &amp;gt; 5 -- Outbreak is more than 5 seconds on CD
+and PQ_HB and not UnitDebuffID(&amp;quot;target&amp;quot;, PQ_FrostFever, &amp;quot;player&amp;quot;)
+and TargetValidation(&amp;quot;target&amp;quot;, PQ_HowlingBlast) then
+	CastSpellByName(GetSpellInfo(PQ_HowlingBlast), &amp;quot;target&amp;quot;)
+	return true
+end</Lua><RecastDelay>0</RecastDelay><Target>Target</Target><CancelChannel>False</CancelChannel><SkipUnknown>True</SkipUnknown></Ability><Ability><Name>[DW] Plague Strike (No Debuff)</Name><Default>false</Default><SpellID>0</SpellID><Actions></Actions><Lua>local PQ_PlagueStrike = PQ_PlagueStrike
+local PQ_BloodPlague = PQ_BloodPlague
+local TargetValidation = TargetValidation
+
+if UnitBuffID(&amp;quot;player&amp;quot;, PQ_UnholyBlight) then return false end
+
+if PQ_CanCast
+and OffhandHasWeapon() == 1
+and UseAoE == false
+and PQ_OutbreakCD - GetTime() &amp;gt; 5 -- Outbreak is more than 5 seconds on CD
+and not UnitDebuffID(&amp;quot;target&amp;quot;, PQ_BloodPlague, &amp;quot;player&amp;quot;)
+and TargetValidation(&amp;quot;target&amp;quot;, PQ_PlagueStrike) then
+	CastSpellByName(GetSpellInfo(PQ_PlagueStrike), &amp;quot;target&amp;quot;)
+	PQ_ShouldPestilence = true
+	return true
+end</Lua><RecastDelay>0</RecastDelay><Target>Target</Target><CancelChannel>False</CancelChannel><SkipUnknown>True</SkipUnknown></Ability><Ability><Name>[DW] Howling Blast (Rime)</Name><Default>false</Default><SpellID>0</SpellID><Actions></Actions><Lua>local PQ_HowlingBlast = PQ_HowlingBlast
+local PQ_Rime = PQ_Rime
+local TargetValidation = TargetValidation
+
+if PQ_CanCast
+and OffhandHasWeapon() == 1
+and UseAoE == false
+and (FrostRunes &amp;gt;= 1 or DeathRunes &amp;gt;= 1)
+and UnitBuffID(&amp;quot;player&amp;quot;, PQ_Rime)
+and TargetValidation(&amp;quot;target&amp;quot;, PQ_HowlingBlast) then
+	CastSpellByName(GetSpellInfo(PQ_HowlingBlast), &amp;quot;target&amp;quot;)
+	return true
+end</Lua><RecastDelay>0</RecastDelay><Target>Target</Target><CancelChannel>False</CancelChannel><SkipUnknown>True</SkipUnknown></Ability><Ability><Name>[DW] Obliterate (U = 1)</Name><Default>false</Default><SpellID>0</SpellID><Actions></Actions><Lua>local PQ_Obliterate = PQ_Obliterate
+local TargetValidationMelee = TargetValidationMelee
+
+if PQ_CanCast
+and OffhandHasWeapon() == 1
+and UseAoE == false
+and ((DeathRunes &amp;gt;= 1 or FrostRunes &amp;gt;= 1) and UnholyRunes == 1)
+and TargetValidationMelee(&amp;quot;target&amp;quot;, PQ_Obliterate) then
+	CastSpellByName(GetSpellInfo(PQ_Obliterate), &amp;quot;target&amp;quot;)
+	return true
+end</Lua><RecastDelay>0</RecastDelay><Target>Target</Target><CancelChannel>False</CancelChannel><SkipUnknown>True</SkipUnknown></Ability><Ability><Name>[DW] Howling Blast</Name><Default>false</Default><SpellID>0</SpellID><Actions></Actions><Lua>local PQ_HowlingBlast = PQ_HowlingBlast
+local PQ_FrostFever = PQ_FrostFever
+local TargetValidation = TargetValidation
+
+if PQ_CanCast
+and OffhandHasWeapon() == 1
+and UseAoE == false
+and (FrostRunes &amp;gt;= 1 or DeathRunes &amp;gt;= 1)
+and TargetValidation(&amp;quot;target&amp;quot;, PQ_HowlingBlast) then
+	CastSpellByName(GetSpellInfo(PQ_HowlingBlast), &amp;quot;target&amp;quot;)
+	return true
+end</Lua><RecastDelay>0</RecastDelay><Target>Target</Target><CancelChannel>False</CancelChannel><SkipUnknown>True</SkipUnknown></Ability><Ability><Name>[DW] Frost Strike (RP &amp;gt; 40)</Name><Default>false</Default><SpellID>0</SpellID><Actions></Actions><Lua>local PQ_FrostStrike = PQ_FrostStrike
+local TargetValidationMelee = TargetValidationMelee
+
+if PQ_CanCast
+and OffhandHasWeapon() == 1
+and UseAoE == false
+and TargetValidationMelee(&amp;quot;target&amp;quot;, PQ_FrostStrike)
+and RunicPower &amp;gt; 76 then
+	CastSpellByName(GetSpellInfo(PQ_FrostStrike), &amp;quot;target&amp;quot;)
+	return true
+end</Lua><RecastDelay>0</RecastDelay><Target>Target</Target><CancelChannel>False</CancelChannel><SkipUnknown>True</SkipUnknown></Ability><Ability><Name>[All] Anti-Magic Shell</Name><Default>false</Default><SpellID>0</SpellID><Actions></Actions><Lua>local HealthFrame = tonumber(UseAMSValue)
+
+if PQ_CanCast
+   and UseAMS == true then
+   if UseAMS
+   	  and PlayerHp &amp;lt;= HealthFrame
+      and PQR_SpellAvailable(PQ_AMS) then
+          CastSpellByName(GetSpellInfo(PQ_AMS),&amp;quot;player&amp;quot;)
+      return true
+    end
+end</Lua><RecastDelay>0</RecastDelay><Target>Custom</Target><CancelChannel>False</CancelChannel><SkipUnknown>True</SkipUnknown></Ability><Ability><Name>[All] Anti-Magic Zone</Name><Default>false</Default><SpellID>0</SpellID><Actions></Actions><Lua>if PQ_CanCast
+   and UseAMZ == true then
+   if UseAMZ
+      and PQI:IsHotkeys(UseAMZKey)
+      and PQR_SpellAvailable(PQ_AMZ) then
+          CastSpellByName(GetSpellInfo(PQ_AMZ),&amp;quot;player&amp;quot;)
+       if SpellIsTargeting() then SpellCancelQueuedSpell() CameraOrSelectOrMoveStart() CameraOrSelectOrMoveStop() end
+	   return true
+    end
+end</Lua><RecastDelay>0</RecastDelay><Target>Player</Target><CancelChannel>False</CancelChannel><SkipUnknown>True</SkipUnknown></Ability><Ability><Name>[All] Blood Tap (&amp;gt;10 and RP &amp;gt; 76)</Name><Default>false</Default><SpellID>0</SpellID><Actions></Actions><Lua>local PQ_BloodCharge = PQ_BloodCharge
+local PQ_KillingMachine = PQ_KillingMachine
+local PQ_BloodTap = PQ_BloodTap
+
+if FullyDepleted == 0 or not IsSpellKnown(PQ_BloodTap) then return false end
+
+local charges = select(4, UnitBuffID(&amp;quot;player&amp;quot;, PQ_BloodCharge))
+
+if PQ_CanBT
+and charges and charges &amp;gt; 10
+and RunicPower &amp;gt; 76 then
+	PQ_BTCD = GetTime() + 0.1
+	PQ_CanBT = false
+	CastSpellByName(GetSpellInfo(PQ_BloodTap), &amp;quot;player&amp;quot;)
+	return true
+end</Lua><RecastDelay>0</RecastDelay><Target>Target</Target><CancelChannel>False</CancelChannel><SkipUnknown>True</SkipUnknown></Ability><Ability><Name>[All] Blood Tap (&amp;gt;10 and RP &amp;gt;= 20)</Name><Default>false</Default><SpellID>0</SpellID><Actions></Actions><Lua>local PQ_BloodCharge = PQ_BloodCharge
+local PQ_KillingMachine = PQ_KillingMachine
+local PQ_BloodTap = PQ_BloodTap
+
+if FullyDepleted == 0 or not IsSpellKnown(PQ_BloodTap) then return false end
+
+local charges = select(4, UnitBuffID(&amp;quot;player&amp;quot;, PQ_BloodCharge))
+
+if PQ_CanBT
+and charges and charges &amp;gt; 10
+and RunicPower &amp;gt;= 20 then
+	PQ_BTCD = GetTime() + 0.1
+	PQ_CanBT = false
+	CastSpellByName(GetSpellInfo(PQ_BloodTap), &amp;quot;player&amp;quot;)
+	return true
+end</Lua><RecastDelay>0</RecastDelay><Target>Target</Target><CancelChannel>False</CancelChannel><SkipUnknown>True</SkipUnknown></Ability><Ability><Name>[All] Blood Tap (KM)</Name><Default>false</Default><SpellID>0</SpellID><Actions></Actions><Lua>local PQ_BloodCharge = PQ_BloodCharge
+local PQ_KillingMachine = PQ_KillingMachine
+local PQ_BloodTap = PQ_BloodTap
+
+if FullyDepleted == 0 or not IsSpellKnown(PQ_BloodTap) then return false end
+
+local charges = select(4, UnitBuffID(&amp;quot;player&amp;quot;, PQ_BloodCharge))
+
+if PQ_CanBT
+and charges and charges &amp;gt;= 5
+and UnitBuffID(&amp;quot;player&amp;quot;, PQ_KillingMachine) then
+	PQ_BTCD = GetTime() + 0.1
+	PQ_CanBT = false
+	CastSpellByName(GetSpellInfo(PQ_BloodTap), &amp;quot;player&amp;quot;)
+	return true
+end</Lua><RecastDelay>0</RecastDelay><Target>Target</Target><CancelChannel>False</CancelChannel><SkipUnknown>True</SkipUnknown></Ability><Ability><Name>[All] Blood Tap (Soul Reaper)</Name><Default>false</Default><SpellID>0</SpellID><Actions></Actions><Lua>local PQ_BloodCharge = PQ_BloodCharge
+local PQ_SoulReaper = PQ_SoulReaper
+local PQ_BloodTap = PQ_BloodTap
+
+if FullyDepleted == 0 or not IsSpellKnown(PQ_BloodTap) then return false end
+
+if TargetHp &amp;lt;= 35 then
+local charges = select(4, UnitBuffID(&amp;quot;player&amp;quot;, PQ_BloodCharge))
+	if PQ_CanBT
+	and charges and charges &amp;gt;= 5
+	and PQ_SoulReaperCD &amp;lt;= GetTime() then
+		PQ_BTCD = GetTime() + 0.1
+		PQ_CanBT = false
+		CastSpellByName(GetSpellInfo(PQ_BloodTap), &amp;quot;player&amp;quot;)
+		return true
+	end
+end</Lua><RecastDelay>0</RecastDelay><Target>Target</Target><CancelChannel>False</CancelChannel><SkipUnknown>True</SkipUnknown></Ability><Ability><Name>[All] Death and Decay</Name><Default>false</Default><SpellID>0</SpellID><Actions></Actions><Lua>local PQ_HowlingBlast = PQ_HowlingBlast
+local PQ_DnD = PQ_DnD
+if UseDnD ~= true then return false end
+if PQ_CanCast
+   and PQI:IsHotkeys(UseDnDKey)
+   and PQR_SpellAvailable(PQ_DnD)
+   and IsSpellInRange(GetSpellInfo(PQ_HowlingBlast), &amp;quot;target&amp;quot;) == 1 then
+	   CastSpellByName(GetSpellInfo(PQ_DnD),nil)
+	if SpellIsTargeting() then SpellCancelQueuedSpell() CameraOrSelectOrMoveStart() CameraOrSelectOrMoveStop() end
+	return true
+end</Lua><RecastDelay>0</RecastDelay><Target>Player</Target><CancelChannel>False</CancelChannel><SkipUnknown>True</SkipUnknown></Ability><Ability><Name>[All] Plague Leech (BP &amp;lt; 3 or FF &amp;lt; 3)</Name><Default>false</Default><SpellID>0</SpellID><Actions></Actions><Lua>local PQ_PlagueLeech = PQ_PlagueLeech
+local PQ_FrostFever = PQ_FrostFever
+local PQ_BloodPlague = PQ_BloodPlague
+local TargetValidation = TargetValidation
+
+if not PQR_SpellAvailable(PQ_PlagueLeech) then return false end
+if FullyDepleted == 0 or not IsSpellKnown(PQ_PlagueLeech) then return false end
+
+local FF,_,_,_,_,_,FFtimer = UnitDebuffID(&amp;quot;target&amp;quot;,PQ_FrostFever,&amp;quot;player&amp;quot;)
+local BP,_,_,_,_,_,BPtimer = UnitDebuffID(&amp;quot;target&amp;quot;,PQ_BloodPlague,&amp;quot;player&amp;quot;)
+
+if PQ_CanCast
+   and FF and BP then	
+	if (BPtimer - GetTime() &amp;lt; 3
+	or FFtimer - GetTime() &amp;lt; 3)
+	and TargetValidation(&amp;quot;target&amp;quot;, PQ_PlagueLeech) then
+		CastSpellByName(GetSpellInfo(PQ_PlagueLeech), &amp;quot;target&amp;quot;)
+		return true
+	end
+end</Lua><RecastDelay>0</RecastDelay><Target>Target</Target><CancelChannel>False</CancelChannel><SkipUnknown>True</SkipUnknown></Ability><Ability><Name>[All] Raise Ally</Name><Default>false</Default><SpellID>0</SpellID><Actions></Actions><Lua>local PQ_RaiseAlly = PQ_RaiseAlly
+if not UseRaiseAlly then return false end
+local v=UseRaiseAllyValue or 2
+
+-- Don&amp;apos;t try to cast if we&amp;apos;re moving.
+if PQR_IsMoving(0.3) then return false end
+
+-- Stop accessing if we&amp;apos;re casting Raise Ally already.
+if UnitCastingInfo(&amp;quot;player&amp;quot;) == GetSpellInfo(PQ_RaiseAlly) then return false end
+
+
+-- Battle Res.
+if IsInRaid() then group = &amp;quot;raid&amp;quot;
+	elseif IsInGroup() then group = &amp;quot;party&amp;quot;
+	else return false end
+
+-- When we&amp;apos;re in a party/raid with more than 1 member...
+if GetNumGroupMembers() &amp;gt; 0 then
+	for i=1,GetNumGroupMembers() do
+		local member = group..i
+		
+		-- Stop out of combat
+		if not UnitAffectingCombat(&amp;quot;player&amp;quot;) then return false end
+
+		if PQ_CanCast
+            and PQR_SpellAvailable(PQ_RaiseAlly)
+			and UnitIsDeadOrGhost(member)
+			and IsSpellInRange(GetSpellInfo(PQ_RaiseAlly),member) == 1 then
+			--	if not IsLineOfSight(member, 3) then return false end
+				-- Raise Ally: Raid/Party
+				if v == 1 then CastSpellByName(GetSpellInfo(PQ_RaiseAlly),member) return true end
+				
+				-- Raise Ally: Tanks &amp; Healers
+				if v == 2 then
+					if UnitGroupRolesAssigned(member) == &amp;quot;TANK&amp;quot; or UnitGroupRolesAssigned(member) == &amp;quot;HEALER&amp;quot; then
+						CastSpellByName(GetSpellInfo(PQ_RaiseAlly),member) return true
+					end
+				end
+		end
+	end
+end</Lua><RecastDelay>0</RecastDelay><Target>Target</Target><CancelChannel>False</CancelChannel><SkipUnknown>True</SkipUnknown></Ability><Ability><Name>[All] Raise Dead</Name><Default>false</Default><SpellID>0</SpellID><Actions></Actions><Lua>local PQ_RaiseDead = PQ_RaiseDead
+local PQ_PlagueStrike = PQ_PlagueStrike
+local SpecialUnit = SpecialUnit
+
+if PQ_CanCast
+   and (UseCD or UseCDBoss)
+   and PQR_SpellAvailable(PQ_RaiseDead)
+   and SpecialUnit()
+   and IsSpellInRange(GetSpellInfo(PQ_PlagueStrike), &amp;quot;target&amp;quot;) == 1 then
+		CastSpellByName(GetSpellInfo(PQ_RaiseDead), &amp;quot;player&amp;quot;)
+		
+		if PQ_Has2MinCD == true then
+			for _,spell in ipairs(PQ_2MinCDList) do
+				if IsSpellKnown(spell) then
+					CastSpellByName(GetSpellInfo(spell), &amp;quot;player&amp;quot;)
+				end
+			end
+		end
+		
+		return true
+end</Lua><RecastDelay>0</RecastDelay><Target>Target</Target><CancelChannel>False</CancelChannel><SkipUnknown>True</SkipUnknown></Ability><Ability><Name>[DW] Frost Strike (RP &amp;gt; 76 or KM)</Name><Default>false</Default><SpellID>0</SpellID><Actions></Actions><Lua>local PQ_FrostStrike = PQ_FrostStrike
+local TargetValidationMelee = TargetValidationMelee
+
+if PQ_CanCast
+and OffhandHasWeapon() == 1
+and UseAoE == false
+and TargetValidationMelee(&amp;quot;target&amp;quot;, PQ_FrostStrike)
+and (RunicPower &amp;gt; 76 or UnitBuffID(&amp;quot;player&amp;quot;, PQ_KillingMachine)) then
+	CastSpellByName(GetSpellInfo(PQ_FrostStrike), &amp;quot;target&amp;quot;)
+	return true
+end</Lua><RecastDelay>0</RecastDelay><Target>Target</Target><CancelChannel>False</CancelChannel><SkipUnknown>True</SkipUnknown></Ability><Ability><Name>[Misc] Debug</Name><Default>false</Default><SpellID>0</SpellID><Actions></Actions><Lua>if OffhandHasWeapon() then
+   print(OffhandHasWeapon())
+   return true
+else
+   print(OffhandHasWeapon())
+end</Lua><RecastDelay>0</RecastDelay><Target>Target</Target><CancelChannel>False</CancelChannel><SkipUnknown>True</SkipUnknown></Ability></DEATHKNIGHT>
